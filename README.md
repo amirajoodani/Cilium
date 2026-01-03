@@ -105,6 +105,86 @@ kind-worker         NotReady  <none>         8m17s   v1.31.0
 kind-worker2        NotReady  <none>         8m17s   v1.31.0
 ```
 
+# Step 1: Install the Cilium CLI Tool
+Download and install the Cilium CLI to your local workstation.<br>
+
+If installed correctly into your workstation’s executable path, you should be able to query the Cilium CLI tool for version information:<br>
+```bash
+cilium version
+cilium-cli: v0.16.19 compiled with go1.23.1 on linux/amd64
+cilium image (default): v1.16.2
+cilium image (stable): v1.16.3
+cilium image (running): unknown. Unable to obtain cilium version. Reason: release: not found 
+```
+We’ll install the default Cilium image into our prepared Kubernetes cluster. Note that the CLI tool also tells us we don’t yet have a Cilium installed in the cluster. We are going to fix that right now.<br>
+
+# Step 2: Install Cilium
+Now we can use the Cilium CLI tool to install Cilium:<br>
+```bash
+cilium install
+🔮 Auto-detected Kubernetes kind: kind
+ℹ️ Using Cilium version 1.16.2
+🔮 Auto-detected cluster name: kind-kind
+🔮 Auto-detected kube-proxy has been installed
+
+It may take a couple of minutes for the installation process to complete. In another terminal, you can use the Cilium CLI tool to watch and wait for Cilium to be fully deployed and operational:
+
+cilium status --wait
+
+   /¯¯\
+/¯¯\__/¯¯\    Cilium:          OK
+\__/¯¯\__/    Operator:        OK
+/¯¯\__/¯¯\    Envoy DaemonSet: OK
+\__/¯¯\__/    Hubble Relay:    disabled
+   \__/       ClusterMesh:     disabled 
+
+DaemonSet           cilium           Desired: 3,    Ready: 3/3,   Available: 3/3
+DaemonSet           cilium-envoy     Desired: 3,    Ready: 3/3,   Available: 3/3
+Deployment          cilium-operator  Desired: 1,    Ready: 1/1,   Available: 1/1
+Containers:         cilium           Running: 3
+                    cilium-envoy     Running: 3
+                    cilium-operator  Running: 1
+Cluster Pods:       3/3 managed by Cilium
+Helm chart version: 1.16.2
+Image versions      cilium quay.io/cilium/cilium:v1.16.2@sha256:4386a8580d8d86934908eea022b0523f812e6a542f30a86a47edd8bed90d51ea: 3
+                    cilium-envoy quay.io/cilium/cilium-envoy:v1.29.9-1726784081-a90146d13b4cd7d168d573396ccf2b3db5a3b047@sha256:9762041c3760de226a8b00cc12f27dacc28b7691ea926748f9b5c18862db503f: 3
+                    cilium-operator quay.io/cilium/operator-generic:v1.16.2@sha256:cccfd3b886d52cb132c06acca8ca559f0fce91a6bd99016219b1a81fdbc4813a: 1
+```
+```bash
+cilium hubble enable --ui
+```
+This command reconfigures and restarts the Cilium agents to ensure they have enabled the embedded Hubble services. The command will also install the cluster-wide Hubble components to enable cluster-wide network observability.<br>
+
+You can verify Hubble components are ready using the cilium status command:<br>
+```bash
+cilium status
+
+   /¯¯\
+/¯¯\__/¯¯\     Cilium:          OK
+\__/¯¯\__/     Operator:        OK
+/¯¯\__/¯¯\     Envoy DaemonSet: OK
+\__/¯¯\__/     Hubble Relay:    OK
+   \__/        ClusterMesh:     disabled 
+
+DaemonSet           cilium           Desired: 3,  Ready: 3/3,  Available: 3/3
+DaemonSet           cilium-envoy     Desired: 3,  Ready: 3/3,  Available: 3/3
+Deployment          cilium-operator  Desired: 1,  Ready: 1/1,  Available: 1/1
+Deployment          hubble-relay     Desired: 1,  Ready: 1/1,  Available: 1/1
+Deployment          hubble-ui        Desired: 1,  Ready: 1/1,  Available: 1/1
+Containers:         cilium           Running: 3
+                    cilium-envoy     Running: 3
+                    cilium-operator  Running: 1
+                    hubble-relay     Running: 1
+                    hubble-ui        Running: 1
+Cluster Pods:       5/5 managed by Cilium
+Helm chart version: 1.16.2
+Image versions      cilium quay.io/cilium/cilium:v1.16.2@sha256:4386a8580d8d86934908eea022b0523f812e6a542f30a86a47edd8bed90d51ea: 3
+                    cilium-envoy quay.io/cilium/cilium-envoy:v1.29.9-1726784081-a90146d13b4cd7d168d573396ccf2b3db5a3b047@sha256:9762041c3760de226a8b00cc12f27dacc28b7691ea926748f9b5c18862db503f: 3
+                    cilium-operator quay.io/cilium/operator-generic:v1.16.2@sha256:cccfd3b886d52cb132c06acca8ca559f0fce91a6bd99016219b1a81fdbc4813a: 1
+                    hubble-relay quay.io/cilium/hubble-relay:v1.16.2@sha256:4b559907b378ac18af82541dafab430a857d94f1057f2598645624e6e7ea286c: 1
+                    hubble-ui quay.io/cilium/hubble-ui-backend:v0.13.1@sha256:0e0eed917653441fded4e7cdb096b7be6a3bddded5a2dd10812a27b1fc6ed95b: 1
+                    hubble-ui quay.io/cilium/hubble-ui:v0.13.1@sha25:e2e9313eb7caf64b0061d9da0efbdad59c6c461f6ca1752768942bfeda0796c6: 1
+```
 
 
 
