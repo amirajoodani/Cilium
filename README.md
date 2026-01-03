@@ -186,6 +186,56 @@ Image versions      cilium quay.io/cilium/cilium:v1.16.2@sha256:4386a8580d8d8693
                     hubble-ui quay.io/cilium/hubble-ui:v0.13.1@sha25:e2e9313eb7caf64b0061d9da0efbdad59c6c461f6ca1752768942bfeda0796c6: 1
 ```
 
+Step 3: Validate Cilium Operation
+The Cilium CLI tool also provides a command to install a set of connectivity tests in a dedicated Kubernetes namespace. We can run these tests to validate that the Cilium install is fully operational:<br>
+```bash
+cilium connectivity test --request-timeout 30s --connect-timeout 10s
+ℹ️ Monitor aggregation detected, will skip some flow validation steps
+✨ [kind-kind] Creating namespace cilium-test for connectivity check...
+✨ [kind-kind] Deploying echo-same-node service...
+✨ [kind-kind] Deploying DNS test server configmap...
+✨ [kind-kind] Deploying same-node deployment...
+✨ [kind-kind] Deploying client deployment...
+✨ [kind-kind] Deploying client2 deployment...
+✨ [kind-kind] Deploying echo-other-node service...
+✨ [kind-kind] Deploying other-node deployment...
+⌛ [kind-kind] Waiting for deployments [client client2 echo-same-node] to become ready…
+⌛ [kind-kind] Waiting for deployments [echo-other-node] to become ready...
+...
+✅ All 32 tests (239 actions) successful, 0 tests skipped, 1 scenarios skipped.
+```
+There are dozens of tests in the connectivity test suite, ensuring network and policy enforcement aspects work as expected. If you install a newer version of Cilium, the number of default connectivity tests might differ from what is depicted here. The connectivity tests may take additional time to complete the first time they are run, as they need to download container images required for the test deployments. The tests should take less time on subsequent runs as they use the locally cached images for the test deployments. You should expect the tests to take at least 10 minutes, allowing for extra time for the test environment container images to be downloaded the first time.<br>
+<b>Note</b>:<br>
+The connectivity tests require at least two worker nodes to deploy successfully in a cluster. The connectivity test pods will not be scheduled on nodes operating in the control-plane role. If you did not provision your cluster with two worker nodes, the connectivity test command may stall while waiting for the test environment deployments to complete.<br>
 
+# Step 4: Examine Cluster with kubectl
+With Cilium installed, we can use kubectl to confirm that the nodes are now ready and the required Cilium operational components are present in the cluster:<br>
+```bash
+kubectl get nodes
+NAME                STATUS   ROLES          AGE  VERSION
+kind-control-plane  Ready    control-plane  42m  v1.31.0
+kind-worker         Ready    <none>         42m  v1.31.0
+kind-worker2        Ready    <none>         42m  v1.31.0
 
+kubectl get daemonsets --all-namespaces
+NAMESPACE    NAME                   DESIRED CURRENT READY UP-TO-DATE AVAILABLE NODE SELECTOR                  AGE
+cilium-test  host-netns             2       2       2     2          2                                        28m
+cilium-test  host-netns-non-cilium  0       0       0     0          0         cilium.io/no-schedule=true     28m
+kube-system  cilium                 3       3       3     3          3         kubernetes.io/os=linux         33m
+kube-system  kube-proxy             3       3       3     3          3         kubernetes.io/os=linux         43m
 
+kubectl get deployments --all-namespaces
+NAMESPACE           NAME                    READY UP-TO-DATE AVAILABLE AGE
+cilium-test         client                  1/1   1          1         29m
+cilium-test         client2                 1/1   1          1         29m
+cilium-test         echo-external-node      0/1   1          0         29m
+cilium-test         echo-other-node         1/1   1          1         29m
+cilium-test         echo-same-node          1/1   1          1         29m
+kube-system         cilium-operator         1/1   1          1         33m
+kube-system         coredns                 2/2   2.         2         44m
+kube-system         hubble-relay            1/1   1          1         30m
+kube-system         hubble-ui               1/1   1          1         30m
+local-path-storage  local-path-provisioner  1/1   1          1         44m
+```
+You should find the cilium daemonset is running on all 3 nodes in the cluster, and the cilium-operator deployment is running on a single node.<br>
+Congratulations! You have Cilium installed, providing connectivity in your Kubernetes cluster. Let’s take a moment and review exactly what you’ve just installed.<br>
