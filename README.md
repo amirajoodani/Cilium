@@ -239,3 +239,52 @@ local-path-storage  local-path-provisioner  1/1   1          1         44m
 ```
 You should find the cilium daemonset is running on all 3 nodes in the cluster, and the cilium-operator deployment is running on a single node.<br>
 Congratulations! You have Cilium installed, providing connectivity in your Kubernetes cluster. Let’s take a moment and review exactly what you’ve just installed.<br>
+
+
+# Operational Overview and Components
+When you install Cilium, there are several operational components (some optional) that are installed. We’ll review the purpose of each of those in this section.<br>
+<img width="728" height="660" alt="cilium-arch" src="https://github.com/user-attachments/assets/9c730352-f66c-48f3-bee5-9e35c90055ef" /> <br>
+
+# Cilium Components
+<b>Cilium Operator</b>:
+The Cilium operator is responsible for managing duties in the cluster which should logically be handled once for the entire cluster, rather than once for each node in the cluster. The Cilium operator is not in the critical path for any forwarding or network policy decision. A cluster will generally continue to function if the operator is temporarily unavailable.<br>
+
+<b>Cilium Agent</b>
+The Cilium agent runs as a daemonset so that there is a Cilium agent pod running on every node in your Kubernetes cluster. The agent does the bulk of the work associated with Cilium:<br>
+
+- Interacts with Kubernetes API server to synchronize cluster state.
+- Interacts with the Linux kernel - loading eBPF programs and updating eBPF maps.
+- Interacts with the Cilium CNI plugin executable, via a filesystem socket, to get notified of newly scheduled workloads.
+- Creates on-demand DNS and Envoy proxies as needed based on requested network policy.
+- Creates Hubble gRPC services when Hubble is enabled.<br>
+
+<b>Cilium Client</b>
+Each pod in the Cilium agent daemonset comes with a Cilium client executable that can be used to inspect the state of Cilium agent and eBPF maps resources installed on that node. The client communicates with the Cilium agent’s REST API from inside the daemonset pod.<br>
+Note: This is not the same as the Cilium CLI tool executable that you installed on your workstation. The Cilium client executable is included in each Cilium agent pod, and can be used as a diagnostic tool to help troubleshoot Cilium agent operation if needed. You’ll seldom interact with the Cilium client as part of normal operation, but we’ll use it in some of the labs to help us see into the internals of the Cilium network state as we work with some of the Cilium capabilities.<br>
+
+<b>Cilium CNI Plugin</b>
+The Cilium agent daemonset also installs the Cilium CNI plugin executable into the Kubernetes host filesystem and reconfigures the node’s CNI to make use of the plugin. The CNI plugin executable is separate from the Cilium agent, and is installed as part of the agent daemonset initialization. When required, the Cilium CNI plugin will communicate with the running Cilium agent using a host filesystem socket.<br>
+
+<b>Hubble Server</b>
+The Hubble server runs on each node and retrieves the eBPF-based visibility from Cilium. It is embedded into the Cilium agent to achieve high performance and low overhead. It offers a gRPC service to retrieve flows and Prometheus metrics.<br>
+
+<b>Hubble Relay</b>
+When Hubble is enabled as part of a Cilium-managed cluster, the Cilium agents running on each node are restarted to enable the Hubble gRPC service to provide node-local observability. For cluster-wide observability, a Hubble Relay deployment is added to the cluster along with two additional services; the Hubble Observer service and the Hubble Peer service.The Hubble Relay deployment provides cluster-wide observability by acting as an intermediary between the cluster-wide Hubble Observer service and the Hubble gRPC services that each Cilium agent provides. The Hubble Peer service makes it possible for Hubble Relay to detect when new Hubble-enabled Cilium agents become active in the cluster. As a user, you will typically be interacting with the Hubble Observer service, using either the Hubble CLI tool or the Hubble UI, to gain insights into the network flows across your cluster that Hubble provides. <br>
+
+<b>Hubble CLI & GUI</b>
+The Hubble CLI (hubble) is a command line tool able to connect to either the gRPC API of hubble-relay or the local server to retrieve flow events.The graphical user interface (hubble-ui) utilizes relay-based visibility to provide a graphical service dependency and connectivity map.<br>
+
+<b>Cluster Mesh API Server</b>
+The Cluster Mesh API server is an optional deployment that is only installed if you enable the Cilium Cluster Mesh feature. Cilium Cluster Mesh allows Kubernetes services to be shared amongst multiple clusters.Cilium Cluster Mesh deploys an etcd key-value store in each cluster, to hold information about Cilium identities. It also exposes a proxy service for each of these etcd stores. Cilium agents running in any member of the same Cluster Mesh can use this service to read information about Cilium identity state globally across the mesh. This makes it possible to create and access global services that span the Cluster Mesh. Once the Cilium Cluster Mesh API service is available, Cilium agents running in any Kubernetes cluster that is a member of the Cluster Mesh are then able to securely read from each cluster’s etcd proxy thus gaining knowledge of Cilium identity state globally across the mesh. This makes it possible to create global services that span the cluster mesh. <br>
+
+# Cilium Endpoints
+Cilium makes application containers available on the network by assigning them IP addresses. All application containers which share a common IP address are grouped together in what Cilium refers to as an Endpoint. Endpoints are an internal representation that Cilium uses to efficiently manage container connectivity and will create Endpoints as needed for all containers it manages. And as it turns out, Kubernetes pods map directly to Cilium Endpoints, as Kubernetes pods are defined as a group of containers operating in a common set of Linux kernel namespaces and sharing an IP address. In a Cilium managed cluster, Cilium will create an Endpoint for each Kubernetes pod running in the cluster.<br>
+
+# Cilium Identity
+A key concept that makes Cilium work as efficiently as it does is Cilium’s notion of Identity. All Cilium Endpoints are assigned a label-based identity.<br>
+<img width="1078" height="597" alt="cilium identity" src="https://github.com/user-attachments/assets/7401d330-5d6e-4c43-8475-e9fed38733e4" /><br>
+A Cilium Identity is determined by Labels and is unique cluster-wide. An endpoint is assigned the identity which matches the endpoint’s Security Relevant Labels, i.e., all endpoints which share the same set of Security Relevant Labels will share the same identity. The unique numeric identifier associated with each identity is then used by eBPF programs in very fast lookup in the network datapath, and underpins how Hubble is able to provide Kubernetes-aware network observability.
+
+As network packets enter or leave a node, Cilium’s eBPF programs map the source and destination IP address to the appropriate numeric identity identifier and then decide which datapath actions should be taken based on policy configuration referencing those numeric identifiers. Each Cilium agent is responsible for updating the identity-relevant eBPF maps with numeric identifiers relevant to endpoints running locally on the node by watching for updates to relevant Kubernetes resources.<br>
+
+
